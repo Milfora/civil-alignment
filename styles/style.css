@@ -9,4 +9,10 @@ footer {
     font-size: 0.8em;
     color: #777;
 }
+button {
+    background-color: blue;
+    color: white;
+    padding: 10px;
+  }
+  
   
