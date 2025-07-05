@@ -2,5 +2,11 @@
 body {
     font-family: sans-serif;
     background-color: #f4f4f4;
-  }
+}
+footer {
+    text-align: center;
+    margin-top: 50px;
+    font-size: 0.8em;
+    color: #777;
+}
   
