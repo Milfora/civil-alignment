@@ -16,6 +16,16 @@ class AlignmentTool {
       this.tolerance = 15; // Tolerance for point selection
       this.selectedElement = null; // Track selected alignment element
       this.editingArc = null; // Track arc being edited for radius
+      
+      // Road marking properties
+      this.roadMarkings = {
+          pavementWidth: 3.5, // 5m total pavement width
+          travelLaneWidth: 3.0, // 3m travel lane width  
+          showPavementEdges: true,
+          showTravelLaneEdges: true,
+          showCentreline: true
+      };
+      
       this.init();
   }
   
@@ -145,6 +155,22 @@ class AlignmentTool {
           }
       });
 
+      // Road marking controls
+      document.getElementById('showPavementEdges').addEventListener('change', (e) => {
+          this.roadMarkings.showPavementEdges = e.target.checked;
+          this.draw();
+      });
+      
+      document.getElementById('showTravelLaneEdges').addEventListener('change', (e) => {
+          this.roadMarkings.showTravelLaneEdges = e.target.checked;
+          this.draw();
+      });
+      
+      document.getElementById('showCentreline').addEventListener('change', (e) => {
+          this.roadMarkings.showCentreline = e.target.checked;
+          this.draw();
+      });
+
   }
   
   // Start drawing
@@ -183,11 +209,7 @@ class AlignmentTool {
               this.selectedElement = element;
               console.log('Selected element:', element);
               
-              // Show radius dialog for arc elements
-              if (element.type === 'arc') {
-                  this.showRadiusDialog(element);
-              }
-              
+              // Only select the element on left-click, don't show radius dialog
               this.draw();
           } else {
               this.selectedElement = null;
@@ -201,6 +223,19 @@ class AlignmentTool {
       e.preventDefault();
       if (this.isDrawing && this.tempPoints.length >= 2) {
           this.finishDrawing();
+      } else if (this.currentAlignment) {
+          // Check for element selection on right-click
+          const mousePos = this.getMousePos(e);
+          const element = this.getElementAt(mousePos);
+          
+          if (element && element.type === 'arc') {
+              this.selectedElement = element;
+              console.log('Right-clicked arc element:', element);
+              
+              // Show radius dialog for arc elements on right-click
+              this.showRadiusDialog(element);
+              this.draw();
+          }
       }
   }
   
@@ -668,7 +703,10 @@ class AlignmentTool {
   drawComplexAlignment(alignment, isActive = false) {
       if (!alignment.elements || alignment.elements.length === 0) return;
       
-      // Draw elements
+      // Draw road markings first (underneath the main alignment)
+      this.drawRoadMarkings(alignment, isActive);
+      
+      // Draw main alignment elements
       alignment.elements.forEach(element => {
           if (element.type === 'tangent') {
               this.drawTangent(element, isActive);
@@ -681,6 +719,81 @@ class AlignmentTool {
       alignment.points.forEach((point, index) => {
           this.drawPoint(point, isActive, index === 0 || index === alignment.points.length - 1);
       });
+  }
+  
+  // Draw road markings (pavement edges, travel lane edges, centreline)
+  drawRoadMarkings(alignment, isActive = false) {
+      if (!alignment.elements || alignment.elements.length === 0) return;
+      
+      const pixelsPerMeter = 20; // Assuming 20 pixels per meter for visualization
+      
+      // Calculate offset distances in pixels
+      const pavementHalfWidth = (this.roadMarkings.pavementWidth / 2) * pixelsPerMeter;
+      const travelLaneHalfWidth = (this.roadMarkings.travelLaneWidth / 2) * pixelsPerMeter;
+      
+      // Draw pavement edges
+      if (this.roadMarkings.showPavementEdges) {
+          const leftPavementEdge = this.calculateOffsetAlignment(alignment.elements, pavementHalfWidth);
+          const rightPavementEdge = this.calculateOffsetAlignment(alignment.elements, -pavementHalfWidth);
+          
+          this.drawOffsetElements(leftPavementEdge, '#4b5563', 2, false); // Solid lines
+          this.drawOffsetElements(rightPavementEdge, '#4b5563', 2, false);
+      }
+      
+      // Draw travel lane edges
+      if (this.roadMarkings.showTravelLaneEdges) {
+          const leftTravelLaneEdge = this.calculateOffsetAlignment(alignment.elements, travelLaneHalfWidth);
+          const rightTravelLaneEdge = this.calculateOffsetAlignment(alignment.elements, -travelLaneHalfWidth);
+          
+          this.drawOffsetElements(leftTravelLaneEdge, '#fbbf24', 2, false); // Solid yellow lines
+          this.drawOffsetElements(rightTravelLaneEdge, '#fbbf24', 2, false);
+      }
+      
+      // Draw centreline
+      if (this.roadMarkings.showCentreline) {
+          this.drawOffsetElements(alignment.elements, '#1f2937', 2, true); // Dashed dark line
+      }
+  }
+  
+  // Draw offset elements with specified style
+  drawOffsetElements(elements, color, lineWidth, isDashed = false) {
+      if (!elements || elements.length === 0) return;
+      
+      this.ctx.strokeStyle = color;
+      this.ctx.lineWidth = lineWidth;
+      
+      if (isDashed) {
+          this.ctx.setLineDash([10, 10]); // 10px dash, 10px gap
+      } else {
+          this.ctx.setLineDash([]);
+      }
+      
+      elements.forEach(element => {
+          if (element.type === 'tangent') {
+              this.drawOffsetTangent(element);
+          } else if (element.type === 'arc') {
+              this.drawOffsetArc(element);
+          }
+      });
+      
+      // Reset line dash
+      this.ctx.setLineDash([]);
+  }
+  
+  // Draw offset tangent element
+  drawOffsetTangent(tangent) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(tangent.startPoint.x, tangent.startPoint.y);
+      this.ctx.lineTo(tangent.endPoint.x, tangent.endPoint.y);
+      this.ctx.stroke();
+  }
+  
+  // Draw offset arc element
+  drawOffsetArc(arc) {
+      this.ctx.beginPath();
+      this.ctx.arc(arc.centerPoint.x, arc.centerPoint.y, arc.radius, 
+                   arc.startAngle, arc.endAngle, arc.isRightTurn);
+      this.ctx.stroke();
   }
   
   drawTangent(tangent, isActive = false) {
@@ -930,6 +1043,111 @@ class AlignmentTool {
   
   hideAlignmentInfo() {
       document.getElementById('alignmentInfo').classList.add('hidden');
+  }
+
+  // Calculate offset alignment elements
+  calculateOffsetAlignment(elements, offsetDistance) {
+      if (!elements || elements.length === 0) return [];
+      
+      const offsetElements = [];
+      
+      elements.forEach(element => {
+          if (element.type === 'tangent') {
+              const offsetTangent = this.calculateOffsetTangent(element, offsetDistance);
+              if (offsetTangent) offsetElements.push(offsetTangent);
+          } else if (element.type === 'arc') {
+              const offsetArc = this.calculateOffsetArc(element, offsetDistance);
+              if (offsetArc) offsetElements.push(offsetArc);
+          }
+      });
+      
+      return offsetElements;
+  }
+  
+  // Calculate offset tangent element
+  calculateOffsetTangent(tangent, offsetDistance) {
+      // Calculate direction vector
+      const dx = tangent.endPoint.x - tangent.startPoint.x;
+      const dy = tangent.endPoint.y - tangent.startPoint.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      
+      if (length === 0) return null;
+      
+      // Unit direction vector
+      const unitX = dx / length;
+      const unitY = dy / length;
+      
+      // Perpendicular vector (rotated 90 degrees counterclockwise)
+      // In canvas coordinates where Y increases downward
+      const perpX = -unitY;
+      const perpY = unitX;
+      
+      // Calculate offset points
+      const offsetStartX = tangent.startPoint.x + offsetDistance * perpX;
+      const offsetStartY = tangent.startPoint.y + offsetDistance * perpY;
+      const offsetEndX = tangent.endPoint.x + offsetDistance * perpX;
+      const offsetEndY = tangent.endPoint.y + offsetDistance * perpY;
+      
+      return {
+          type: 'tangent',
+          startPoint: { x: offsetStartX, y: offsetStartY },
+          endPoint: { x: offsetEndX, y: offsetEndY },
+          bearing: tangent.bearing,
+          length: tangent.length,
+          offset: offsetDistance,
+          parentElement: tangent
+      };
+  }
+  
+  // Calculate offset arc element
+  calculateOffsetArc(arc, offsetDistance) {
+      // For arcs, the offset creates a parallel curve
+      // The radius changes: R_offset = R_original + offset (for outside) or R_original - offset (for inside)
+      let offsetRadius;
+      
+      if (arc.isRightTurn) {
+          // For right turns, positive offset goes to the outside (larger radius)
+          offsetRadius = arc.radius + offsetDistance;
+      } else {
+          // For left turns, positive offset goes to the outside (larger radius)  
+          offsetRadius = arc.radius - offsetDistance;
+      }
+
+      // get start/end angle for arc
+      const startAngle = arc.startAngle;
+      const endAngle = arc.endAngle;
+
+      // get perpendiular vector for start/end angle
+      const startPerpX = -Math.sin(startAngle);
+      const startPerpY = Math.cos(startAngle);
+
+      const endPerpX = -Math.sin(endAngle);
+      const endPerpY = Math.cos(endAngle);
+
+      // calculate start/end point for offset arc
+      const offsetStartX = arc.startPoint.x + offsetDistance * startPerpX;
+      const offsetStartY = arc.startPoint.y + offsetDistance * startPerpY;
+      const offsetEndX = arc.endPoint.x + offsetDistance * endPerpX;
+      const offsetEndY = arc.endPoint.y + offsetDistance * endPerpY;
+      
+      // Skip if offset radius becomes negative or too small
+      if (offsetRadius <= 0) return null;
+      
+      return {
+          type: 'arc',
+          centerPoint: { x: arc.centerPoint.x, y: arc.centerPoint.y },
+          radius: offsetRadius,
+          startAngle: startAngle,
+          endAngle: endAngle,
+          deflectionAngle: arc.deflectionAngle,
+          isRightTurn: arc.isRightTurn,
+          startPoint: { x: offsetStartX, y: offsetStartY },
+          endPoint: { x: offsetEndX, y: offsetEndY },
+          ipPoint: { ...arc.ipPoint },
+          tangentLength: arc.tangentLength,
+          offset: offsetDistance,
+          parentElement: arc
+      };
   }
 }
 
