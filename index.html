@@ -67,6 +67,13 @@
                 <div>Tangents: <span id="tangentCount">0</span></div>
                 <div>Arcs: <span id="arcCount">0</span></div>
             </div>
+            
+            <!-- Selected Element Info -->
+            <div id="selectedElementInfo" class="text-xs text-blue-600 mt-2 border-t pt-2 hidden">
+                <div class="font-semibold">Selected Element:</div>
+                <div id="selectedElementType">None</div>
+                <div id="selectedElementDetails"></div>
+            </div>
         </div>
         
         <!-- Coordinate Display -->
@@ -106,6 +113,9 @@
     <div id="radiusModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-white rounded-lg p-6 w-96 max-w-md">
             <h2 class="text-xl font-bold mb-4">Edit Arc Radius</h2>
+            <div class="mb-2">
+                <div id="arcInfoDisplay" class="text-sm text-gray-600 mb-3">Editing Arc at IP 1</div>
+            </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Current Radius:</label>
                 <div id="currentRadiusDisplay" class="text-lg font-mono text-blue-600 mb-3">100</div>

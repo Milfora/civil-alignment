@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cursor Demo - Different Interaction States</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            cursor: default; /* Default arrow cursor */
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        button.active {
+            background-color: #007bff;
+            color: white;
+        }
+
+        button:not(.active) {
+            background-color: #e9ecef;
+            color: #333;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        .canvas-area {
+            width: 100%;
+            height: 400px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            position: relative;
+            background: #fafafa;
+            overflow: hidden;
+        }
+
+        .canvas-area.create-mode {
+            cursor: crosshair; /* Crosshair cursor for creating objects */
+        }
+
+        .canvas-area.pencil-mode {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M12.854 3.146a.5.5 0 0 1 0 .708l-9 9a.5.5 0 0 1-.708 0l-1-1a.5.5 0 0 1 0-.708l9-9a.5.5 0 0 1 .708 0l1 1z" fill="%23000"/></svg>'), auto;
+        }
+
+        .canvas-area.dragging {
+            cursor: grabbing; /* Closed hand cursor while dragging */
+        }
+
+        .circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            position: absolute;
+            transition: transform 0.1s ease;
+        }
+
+        .circle:hover {
+            cursor: grab; /* Open hand cursor when hovering over draggable objects */
+            transform: scale(1.1);
+        }
+
+        .circle.dragging {
+            cursor: grabbing; /* Closed hand cursor while being dragged */
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        .circle:nth-child(1) { background: #ff6b6b; top: 50px; left: 100px; }
+        .circle:nth-child(2) { background: #4ecdc4; top: 150px; left: 200px; }
+        .circle:nth-child(3) { background: #45b7d1; top: 250px; left: 300px; }
+        .circle:nth-child(4) { background: #f9ca24; top: 100px; left: 400px; }
+        .circle:nth-child(5) { background: #f0932b; top: 200px; left: 500px; }
+
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e7f3ff;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+
+        .instructions h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+
+        .instructions ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin: 5px 0;
+        }
+
+        .mode-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cursor Demo - Different Interaction States</h1>
+        
+        <div class="controls">
+            <button id="normalMode" class="active">Normal Mode (Arrow)</button>
+            <button id="createMode">Create Mode (Crosshair)</button>
+            <button id="pencilMode">Pencil Mode (Pencil)</button>
+            <button id="clearAll">Clear All Circles</button>
+        </div>
+
+        <div class="canvas-area" id="canvasArea">
+            <div class="circle"></div>
+            <div class="circle"></div>
+            <div class="circle"></div>
+            <div class="circle"></div>
+            <div class="circle"></div>
+        </div>
+
+        <div class="instructions">
+            <h3>How to Use:</h3>
+            <ul>
+                <li><strong>Normal Mode:</strong> Default arrow cursor. Hover over circles to see grab cursor, click and drag to see grabbing cursor.</li>
+                <li><strong>Create Mode:</strong> Crosshair cursor. Click anywhere in the canvas to create new circles. <em>Right-click to exit create mode.</em></li>
+                <li><strong>Pencil Mode:</strong> Pencil cursor. Similar to create mode but with a pencil icon. <em>Right-click to exit pencil mode.</em></li>
+                <li><strong>Drag Circles:</strong> Click and drag any circle to move it around (works in all modes).</li>
+                <li><strong>Hover Effects:</strong> Hover over circles to see selection cursor and scaling effect.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="mode-indicator" id="modeIndicator">Normal Mode</div>
+
+    <script>
+        let currentMode = 'normal';
+        let isDragging = false;
+        let dragElement = null;
+        let dragOffset = { x: 0, y: 0 };
+        let circleCounter = 5;
+
+        const canvasArea = document.getElementById('canvasArea');
+        const modeIndicator = document.getElementById('modeIndicator');
+        const normalModeBtn = document.getElementById('normalMode');
+        const createModeBtn = document.getElementById('createMode');
+        const pencilModeBtn = document.getElementById('pencilMode');
+        const clearAllBtn = document.getElementById('clearAll');
+
+        // Mode switching
+        normalModeBtn.addEventListener('click', () => setMode('normal'));
+        createModeBtn.addEventListener('click', () => setMode('create'));
+        pencilModeBtn.addEventListener('click', () => setMode('pencil'));
+        clearAllBtn.addEventListener('click', clearAllCircles);
+
+        function setMode(mode) {
+            currentMode = mode;
+            
+            // Update button states
+            document.querySelectorAll('.controls button').forEach(btn => btn.classList.remove('active'));
+            
+            // Update canvas cursor
+            canvasArea.className = 'canvas-area';
+            
+            switch(mode) {
+                case 'normal':
+                    normalModeBtn.classList.add('active');
+                    modeIndicator.textContent = 'Normal Mode';
+                    break;
+                case 'create':
+                    createModeBtn.classList.add('active');
+                    canvasArea.classList.add('create-mode');
+                    modeIndicator.textContent = 'Create Mode';
+                    break;
+                case 'pencil':
+                    pencilModeBtn.classList.add('active');
+                    canvasArea.classList.add('pencil-mode');
+                    modeIndicator.textContent = 'Pencil Mode';
+                    break;
+            }
+        }
+
+        // Create new circles
+        canvasArea.addEventListener('click', (e) => {
+            if (currentMode === 'create' || currentMode === 'pencil') {
+                if (e.target === canvasArea) {
+                    createCircle(e.offsetX, e.offsetY);
+                }
+            }
+        });
+
+        // Right-click to exit create/pencil mode
+        canvasArea.addEventListener('contextmenu', (e) => {
+            if (currentMode === 'create' || currentMode === 'pencil') {
+                e.preventDefault(); // Prevent context menu from appearing
+                setMode('normal');
+            }
+        });
+
+        function createCircle(x, y) {
+            const circle = document.createElement('div');
+            circle.className = 'circle';
+            circle.style.left = (x - 25) + 'px';
+            circle.style.top = (y - 25) + 'px';
+            
+            // Random color
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#a55eea', '#26de81', '#fd79a8'];
+            circle.style.background = colors[Math.floor(Math.random() * colors.length)];
+            
+            canvasArea.appendChild(circle);
+            
+            // Add drag functionality to new circle
+            addDragFunctionality(circle);
+        }
+
+        function clearAllCircles() {
+            const circles = canvasArea.querySelectorAll('.circle');
+            circles.forEach(circle => circle.remove());
+        }
+
+        // Drag functionality
+        function addDragFunctionality(circle) {
+            circle.addEventListener('mousedown', startDrag);
+        }
+
+        function startDrag(e) {
+            e.preventDefault();
+            isDragging = true;
+            dragElement = e.target;
+            
+            const rect = canvasArea.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left - dragElement.offsetLeft;
+            dragOffset.y = e.clientY - rect.top - dragElement.offsetTop;
+            
+            dragElement.classList.add('dragging');
+            canvasArea.classList.add('dragging');
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function drag(e) {
+            if (!isDragging || !dragElement) return;
+            
+            const rect = canvasArea.getBoundingClientRect();
+            let x = e.clientX - rect.left - dragOffset.x;
+            let y = e.clientY - rect.top - dragOffset.y;
+            
+            // Keep within canvas bounds
+            x = Math.max(0, Math.min(x, canvasArea.offsetWidth - 50));
+            y = Math.max(0, Math.min(y, canvasArea.offsetHeight - 50));
+            
+            dragElement.style.left = x + 'px';
+            dragElement.style.top = y + 'px';
+        }
+
+        function stopDrag() {
+            if (dragElement) {
+                dragElement.classList.remove('dragging');
+                canvasArea.classList.remove('dragging');
+            }
+            
+            isDragging = false;
+            dragElement = null;
+            
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        // Initialize drag functionality for existing circles
+        document.querySelectorAll('.circle').forEach(addDragFunctionality);
+
+        // Prevent text selection during drag
+        document.addEventListener('selectstart', (e) => {
+            if (isDragging) e.preventDefault();
+        });
+    </script>
+</body>
+</html>

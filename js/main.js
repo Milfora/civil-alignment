@@ -110,9 +110,11 @@ class AlignmentTool {
       if (element) {
         this.selectedElement = element;
         console.log('Selected element:', element);
+        this.updateSelectedElementInfo();
         this.draw();
       } else {
         this.selectedElement = null;
+        this.updateSelectedElementInfo();
         this.draw();
       }
     }
@@ -129,6 +131,7 @@ class AlignmentTool {
       if (element && element.type === 'arc') {
         this.selectedElement = element;
         console.log('Right-clicked arc element:', element);
+        this.updateSelectedElementInfo();
         this.uiManager.showRadiusDialog(element);
         this.draw();
       }
@@ -202,11 +205,17 @@ class AlignmentTool {
   saveAlignment() {
     const name = this.uiManager.getAlignmentName();
     if (name) {
+      // Initialize radii object with default radius for all IPs
+      const radii = { default: this.defaultRadius };
+      for (let i = 1; i < this.tempPoints.length - 1; i++) {
+        radii[i] = this.defaultRadius;
+      }
+      
       // Calculate curve points from alignment elements
       const elements = AlignmentCalculations.calculateAlignmentElements(
         [...this.tempPoints], 
         [], 
-        this.defaultRadius
+        radii
       );
       
       // Extract curve points from arc elements
@@ -223,12 +232,14 @@ class AlignmentTool {
         points: [...this.tempPoints],
         elements: elements,
         curvePoints: curvePoints,
+        radii: radii, // Store individual radii
       };
       this.alignments.push(this.currentAlignment);
       this.uiManager.hideNameModal();
       this.uiManager.hideControlsPanel();
       this.uiManager.showAlignmentInfo(this.currentAlignment);
       this.uiManager.logAlignmentData(this.currentAlignment);
+      this.updateSelectedElementInfo(); // Initialize element info display
       this.isDrawing = false;
       this.tempPoints = [];
       this.tempCurvePoints = [];
@@ -243,11 +254,19 @@ class AlignmentTool {
   
   recalculateAlignment() {
     if (this.currentAlignment) {
-      // Recalculate elements
+      // Ensure radii object exists, create if missing (for backward compatibility)
+      if (!this.currentAlignment.radii) {
+        this.currentAlignment.radii = { default: this.defaultRadius };
+        for (let i = 1; i < this.currentAlignment.points.length - 1; i++) {
+          this.currentAlignment.radii[i] = this.defaultRadius;
+        }
+      }
+      
+      // Recalculate elements using individual radii
       const elements = AlignmentCalculations.calculateAlignmentElements(
         this.currentAlignment.points, 
         [], 
-        this.defaultRadius
+        this.currentAlignment.radii
       );
       
       // Update curve points from arc elements
@@ -263,17 +282,39 @@ class AlignmentTool {
       this.currentAlignment.curvePoints = curvePoints;
       this.uiManager.updateAlignmentStats(this.currentAlignment);
       this.uiManager.logAlignmentData(this.currentAlignment);
+      
+      // Update selected element reference if it exists
+      if (this.selectedElement && this.selectedElement.type === 'arc') {
+        this.selectedElement = this.currentAlignment.elements.find(el => 
+          el.type === 'arc' && el.ipIndex === this.selectedElement.ipIndex
+        );
+        this.updateSelectedElementInfo();
+      }
+      
       this.draw();
     }
   }
   
   updateRadius(newRadius) {
-    this.defaultRadius = newRadius;
-    
-    if (this.currentAlignment) {
-      this.selectedElement = null;
-      this.recalculateAlignment();
-      console.log('Arc radius updated to:', newRadius);
+    if (this.currentAlignment && this.selectedElement && this.selectedElement.type === 'arc') {
+      // Update the radius for the specific arc
+      const ipIndex = this.selectedElement.ipIndex;
+      if (ipIndex !== undefined) {
+        this.currentAlignment.radii[ipIndex] = newRadius;
+        this.recalculateAlignment();
+        
+        // Update the selected element to reflect the new radius
+        this.selectedElement = this.currentAlignment.elements.find(el => 
+          el.type === 'arc' && el.ipIndex === ipIndex
+        );
+        this.updateSelectedElementInfo();
+        
+        console.log(`Arc at IP ${ipIndex} radius updated to:`, newRadius);
+      }
+    } else {
+      // Fallback: update default radius for new alignments
+      this.defaultRadius = newRadius;
+      console.log('Default radius updated to:', newRadius);
     }
   }
   
@@ -319,6 +360,54 @@ class AlignmentTool {
       this.selectedElement,
       this.isDrawing
     );
+  }
+
+  /**
+   * Get the radius for a specific IP index
+   * @param {number} ipIndex - The IP index
+   * @returns {number} The radius for that IP
+   */
+  getRadiusForIP(ipIndex) {
+    if (!this.currentAlignment || !this.currentAlignment.radii) {
+      return this.defaultRadius;
+    }
+    
+    if (this.currentAlignment.radii[ipIndex]) {
+      return this.currentAlignment.radii[ipIndex];
+    }
+    
+    return this.currentAlignment.radii.default || this.defaultRadius;
+  }
+
+  /**
+   * Update the selected element info display
+   */
+  updateSelectedElementInfo() {
+    const infoPanel = document.getElementById('selectedElementInfo');
+    const typeElement = document.getElementById('selectedElementType');
+    const detailsElement = document.getElementById('selectedElementDetails');
+    
+    if (!this.selectedElement) {
+      infoPanel.classList.add('hidden');
+      typeElement.textContent = 'None';
+      detailsElement.textContent = '';
+      return;
+    }
+    
+    infoPanel.classList.remove('hidden');
+    
+    if (this.selectedElement.type === 'tangent') {
+      typeElement.textContent = 'Tangent';
+      const length = this.selectedElement.length.toFixed(1);
+      const bearing = (this.selectedElement.bearing * 180 / Math.PI).toFixed(1);
+      detailsElement.textContent = `Length: ${length}px, Bearing: ${bearing}°`;
+    } else if (this.selectedElement.type === 'arc') {
+      typeElement.textContent = `Arc (IP ${this.selectedElement.ipIndex || 'unknown'})`;
+      const radius = this.selectedElement.radius.toFixed(1);
+      const deflection = (Math.abs(this.selectedElement.deflectionAngle) * 180 / Math.PI).toFixed(1);
+      const direction = this.selectedElement.isRightTurn ? 'Right' : 'Left';
+      detailsElement.textContent = `Radius: ${radius}px, Deflection: ${deflection}°, ${direction} turn`;
+    }
   }
 }
 

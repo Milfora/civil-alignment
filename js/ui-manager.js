@@ -166,12 +166,20 @@ export class UIManager {
    */
   showRadiusDialog(arc) {
     document.getElementById('radiusModal').classList.remove('hidden');
+    
+    // Update arc info display
+    const ipIndex = arc.ipIndex || 'unknown';
+    document.getElementById('arcInfoDisplay').textContent = `Editing Arc at IP ${ipIndex}`;
+    
     document.getElementById('currentRadiusDisplay').textContent = arc.radius.toFixed(1);
     document.getElementById('newRadiusInput').value = arc.radius.toFixed(1);
     document.getElementById('newRadiusInput').focus();
     
     // Store reference to the arc being edited
     this.editingArc = arc;
+    
+    // Log which arc is being edited for debugging
+    console.log(`Editing arc at IP ${arc.ipIndex || 'unknown'} with radius ${arc.radius}`);
   }
 
   /**

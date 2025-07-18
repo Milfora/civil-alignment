@@ -10,7 +10,7 @@ export class AlignmentCalculations {
    * Calculate alignment elements from points and curve points
    * @param {Array} points - Array of IP points
    * @param {Array} curvePoints - Array of curve points
-   * @param {number} defaultRadius - Default radius for arcs
+   * @param {number|Object} defaultRadius - Default radius for arcs, or object with individual radii
    * @returns {Array} Array of alignment elements
    */
   static calculateAlignmentElements(points, curvePoints = [], defaultRadius = 100) {
@@ -19,14 +19,28 @@ export class AlignmentCalculations {
     const elements = [];
     const arcs = [];
     
+    // Handle individual radii - can be a number (global) or object with per-IP radii
+    const getRadiusForIP = (ipIndex) => {
+      if (typeof defaultRadius === 'number') {
+        return defaultRadius;
+      } else if (typeof defaultRadius === 'object' && defaultRadius[ipIndex]) {
+        return defaultRadius[ipIndex];
+      } else if (typeof defaultRadius === 'object' && defaultRadius.default) {
+        return defaultRadius.default;
+      }
+      return 100; // fallback
+    };
+    
     // First, create arc elements at intermediate IPs (not at first or last point)
     for (let i = 1; i < points.length - 1; i++) {
       const prevPoint = points[i - 1];
       const currentPoint = points[i];
       const nextPoint = points[i + 1];
+      const radius = getRadiusForIP(i);
      
-      const arc = this.calculateArcElement(prevPoint, currentPoint, nextPoint, defaultRadius);
+      const arc = this.calculateArcElement(prevPoint, currentPoint, nextPoint, radius);
       if (arc) {
+        arc.ipIndex = i; // Store which IP this arc belongs to
         arcs[i] = arc; // Store arc indexed by IP position
       }
     }
