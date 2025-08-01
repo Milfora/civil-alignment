@@ -17,6 +17,7 @@ class AlignmentTool {
     this.isDrawing = false;
     this.isEditing = false;
     this.currentAlignment = null;
+    this.selectedAlignment = null; // New property to track which alignment shows grips
     this.tempPoints = [];
     this.tempCurvePoints = [];
     this.draggedPoint = null;
@@ -53,7 +54,7 @@ class AlignmentTool {
   setupEventListeners() {
     // Register callbacks with UI manager
     this.uiManager.registerCallbacks({
-      startDrawing: () => this.startDrawing(),
+      createAlignment: () => this.createAlignment(),
       cancelDrawing: () => this.cancelDrawing(),
       saveAlignment: () => this.saveAlignment(),
       cancelNaming: () => this.cancelNaming(),
@@ -71,30 +72,46 @@ class AlignmentTool {
     this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+    this.canvas.addEventListener('mouseleave', (e) => this.handleMouseLeave(e));
     
     // Mouse move for coordinate display
     this.canvas.addEventListener('mousemove', (e) => {
       const mousePos = this.getMousePos(e);
       this.uiManager.updateCoordinateDisplay(mousePos, this.canvas.height);
     });
+    
+    // Keyboard events for deletion
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && 
+          this.selectedAlignment && 
+          !this.isDrawing &&
+          !e.target.matches('input, textarea')) { // Don't delete when typing in input fields
+        e.preventDefault(); // Prevent default browser behavior
+        this.deleteSelectedAlignment();
+      }
+    });
   }
   
-  startDrawing() {
+  createAlignment() {
     this.isDrawing = true;
     this.tempPoints = [];
     this.tempCurvePoints = [];
     this.uiManager.showControlsPanel();
-    this.uiManager.hideStartButton();
-    this.uiManager.addCanvasClass(this.canvas, 'cursor-crosshair');
+    this.uiManager.hideCreateAlignmentButton();
+    this.uiManager.setCanvasMode(this.canvas, 'drawing');
   }
   
   cancelDrawing() {
     this.isDrawing = false;
     this.tempPoints = [];
     this.tempCurvePoints = [];
+    this.selectedAlignment = null; // Clear selection when canceling
+    this.currentAlignment = null;
+    this.selectedElement = null;
     this.uiManager.hideControlsPanel();
-    this.uiManager.showStartButton();
-    this.uiManager.removeCanvasClass(this.canvas, 'cursor-crosshair');
+    this.uiManager.showCreateAlignmentButton();
+    this.uiManager.hideAlignmentInfo();
+    this.uiManager.setCanvasMode(this.canvas, 'normal');
     this.draw();
   }
   
@@ -103,18 +120,42 @@ class AlignmentTool {
       const point = this.getMousePos(e);
       this.tempPoints.push(point);
       this.draw();
-    } else if (this.currentAlignment) {
+    } else {
       const mousePos = this.getMousePos(e);
-      const element = this.getElementAt(mousePos);
       
-      if (element) {
-        this.selectedElement = element;
-        console.log('Selected element:', element);
+      // First, check if we clicked on any alignment (to select the alignment itself)
+      let clickedAlignment = null;
+      for (let alignment of this.alignments) {
+        if (this.isPositionOnAlignment(mousePos, alignment)) {
+          clickedAlignment = alignment;
+          break;
+        }
+      }
+      
+      if (clickedAlignment) {
+        // Select the alignment (to show grips)
+        this.selectedAlignment = clickedAlignment;
+        this.currentAlignment = clickedAlignment; // Also make it current for element interaction
+        
+        // Check if we clicked on a specific element within the alignment
+        const element = this.getElementAt(mousePos);
+        if (element) {
+          this.selectedElement = element;
+          console.log('Selected element:', element);
+        } else {
+          this.selectedElement = null;
+        }
+        
         this.updateSelectedElementInfo();
+        this.uiManager.showAlignmentInfo(clickedAlignment);
         this.draw();
       } else {
+        // Clicked on empty space - deselect everything
+        this.selectedAlignment = null;
+        this.currentAlignment = null;
         this.selectedElement = null;
         this.updateSelectedElementInfo();
+        this.uiManager.hideAlignmentInfo();
         this.draw();
       }
     }
@@ -151,7 +192,7 @@ class AlignmentTool {
           x: mousePos.x - point.x,
           y: mousePos.y - point.y
         };
-        this.uiManager.setCursor(this.canvas, 'grabbing');
+        this.uiManager.setCanvasMode(this.canvas, 'dragging');
       }
       else if (curvePoint) {
         this.isEditing = true;
@@ -160,7 +201,7 @@ class AlignmentTool {
           x: mousePos.x - curvePoint.x,
           y: mousePos.y - curvePoint.y
         };
-        this.uiManager.setCursor(this.canvas, 'grabbing');
+        this.uiManager.setCanvasMode(this.canvas, 'dragging');
       }
     }
   }
@@ -183,7 +224,19 @@ class AlignmentTool {
     else if (!this.isDrawing && this.currentAlignment) {
       const mousePos = this.getMousePos(e);
       const point = this.getPointAt(mousePos, this.currentAlignment.points);
-      this.uiManager.setCursor(this.canvas, point ? 'grab' : 'default');
+      const curvePoint = this.getPointAt(mousePos, this.currentAlignment.curvePoints);
+      const element = this.getElementAt(mousePos);
+      
+      // Check if hovering over any interactive element
+      const isHoveringInteractive = point || curvePoint || element;
+      this.uiManager.setHoverCursor(this.canvas, isHoveringInteractive);
+    }
+    else if (this.isDrawing && this.uiManager.currentCursorMode === 'create') {
+      console.log('Mousemove - isDrawing', this.isDrawing);
+      console.log('ui-manager', this.uiManager.currentCursorMode);
+      // set hover cursor to crosshair
+      
+      
     }
   }
   
@@ -192,7 +245,14 @@ class AlignmentTool {
       this.isEditing = false;
       this.draggedPoint = null;
       this.draggedCurvePoint = null;
-      this.uiManager.setCursor(this.canvas, 'default');
+      this.uiManager.setCanvasMode(this.canvas, 'normal');
+    }
+  }
+  
+  handleMouseLeave(e) {
+    // Reset cursor to default when mouse leaves canvas
+    if (!this.isDrawing && !this.isEditing) {
+      this.uiManager.setCanvasMode(this.canvas, 'normal');
     }
   }
   
@@ -235,14 +295,20 @@ class AlignmentTool {
         radii: radii, // Store individual radii
       };
       this.alignments.push(this.currentAlignment);
+      
+      // Auto-select the newly created alignment to show grips
+      this.selectedAlignment = this.currentAlignment;
+      
       this.uiManager.hideNameModal();
       this.uiManager.hideControlsPanel();
+      this.uiManager.showCreateAlignmentButton(); // Show button again after saving
       this.uiManager.showAlignmentInfo(this.currentAlignment);
       this.uiManager.logAlignmentData(this.currentAlignment);
       this.updateSelectedElementInfo(); // Initialize element info display
       this.isDrawing = false;
       this.tempPoints = [];
       this.tempCurvePoints = [];
+      this.uiManager.setCanvasMode(this.canvas, 'normal');
       this.draw();
     }
   }
@@ -293,6 +359,32 @@ class AlignmentTool {
       
       this.draw();
     }
+  }
+  
+  /**
+   * Delete the currently selected alignment
+   */
+  deleteSelectedAlignment() {
+    if (!this.selectedAlignment) return;
+    
+    // Find and remove the alignment from the array
+    const index = this.alignments.indexOf(this.selectedAlignment);
+    if (index > -1) {
+      this.alignments.splice(index, 1);
+      console.log(`Deleted alignment: ${this.selectedAlignment.name}`);
+    }
+    
+    // Clear all selection and drag states
+    this.selectedAlignment = null;
+    this.currentAlignment = null;
+    this.selectedElement = null;
+    this.draggedPoint = null;
+    this.draggedCurvePoint = null;
+    
+    // Update UI
+    this.uiManager.hideAlignmentInfo();
+    this.updateSelectedElementInfo();
+    this.draw();
   }
   
   updateRadius(newRadius) {
@@ -351,11 +443,38 @@ class AlignmentTool {
     
     return null;
   }
+
+  /**
+   * Check if a mouse position is within the bounds of an alignment
+   * @param {object} mousePos - The mouse position { x, y }
+   * @param {object} alignment - The alignment object to check
+   * @returns {boolean} True if the mouse position is within the alignment's bounds
+   */
+  isPositionOnAlignment(mousePos, alignment) {
+    if (!alignment.elements) return false;
+    
+    // Check if clicked on any element within the alignment
+    for (let element of alignment.elements) {
+      if (AlignmentCalculations.isElementAtPosition(mousePos, element, this.tolerance)) {
+        return true;
+      }
+    }
+    
+    // Also check if clicked on any IP points
+    for (let point of alignment.points) {
+      if (GeometryUtils.isPointNear(mousePos, point, this.tolerance)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
   
   draw() {
     this.renderer.drawScene(
       this.alignments,
       this.currentAlignment,
+      this.selectedAlignment,
       this.tempPoints,
       this.selectedElement,
       this.isDrawing
