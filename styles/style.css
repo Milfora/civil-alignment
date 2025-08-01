@@ -36,9 +36,30 @@ body {
 #alignmentCanvas {
     display: block;
     touch-action: none; /* Prevent scrolling on touch devices */
+    cursor: default; /* Default arrow cursor */
+    transition: cursor 0.1s ease;
 }
 
-/* Custom cursor styles */
+/* Cursor styles for different interaction states */
+#alignmentCanvas.create-mode {
+    cursor: crosshair; /* Crosshair cursor for creating alignments */
+}
+
+
+#alignmentCanvas.dragging {
+    cursor: grabbing; /* Closed hand cursor while dragging */
+}
+
+/* Hover effects for interactive elements */
+.alignment-element:hover {
+    cursor: grab; /* Open hand cursor when hovering over draggable objects */
+}
+
+.alignment-element.dragging {
+    cursor: grabbing; /* Closed hand cursor while being dragged */
+}
+
+/* Legacy cursor styles for backward compatibility */
 .cursor-crosshair {
     cursor: crosshair !important;
 }

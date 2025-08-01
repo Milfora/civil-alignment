@@ -37,17 +37,20 @@ export class CanvasRenderer {
    * Draw complete scene
    * @param {Array} alignments - Array of alignments
    * @param {Object} currentAlignment - Current active alignment
+   * @param {Object} selectedAlignment - Currently selected alignment (shows grips)
    * @param {Array} tempPoints - Temporary points during drawing
    * @param {Object} selectedElement - Currently selected element
    * @param {boolean} isDrawing - Whether currently drawing
    */
-  drawScene(alignments, currentAlignment, tempPoints, selectedElement, isDrawing) {
+  drawScene(alignments, currentAlignment, selectedAlignment, tempPoints, selectedElement, isDrawing) {
     this.clear();
     this.drawGrid();
     
     // Draw saved alignments
     alignments.forEach(alignment => {
-      this.drawAlignment(alignment, alignment === currentAlignment, selectedElement);
+      const isActive = alignment === currentAlignment;
+      const showGrips = alignment === selectedAlignment;
+      this.drawAlignment(alignment, isActive, showGrips, selectedElement);
     });
     
     // Draw temporary alignment while drawing
@@ -83,13 +86,22 @@ export class CanvasRenderer {
    * Draw a complete alignment
    * @param {Object} alignment - Alignment object
    * @param {boolean} isActive - Whether this is the active alignment
+   * @param {boolean} showGrips - Whether to show grips (IP points)
    * @param {Object} selectedElement - Currently selected element
    */
-  drawAlignment(alignment, isActive = false, selectedElement = null) {
+  drawAlignment(alignment, isActive = false, showGrips = false, selectedElement = null) {
     if (!alignment.elements || alignment.elements.length === 0) return;
     
     // Draw road markings first (underneath the main alignment)
     this.drawRoadMarkings(alignment, isActive);
+    
+    // Check if we should show alignment-level highlighting
+    const showAlignmentHighlight = showGrips && !selectedElement;
+    
+    // Draw alignment-level highlight if selected but no element is selected
+    if (showAlignmentHighlight) {
+      this.drawAlignmentHighlight(alignment);
+    }
     
     // Draw main alignment elements
     alignment.elements.forEach(element => {
@@ -102,10 +114,41 @@ export class CanvasRenderer {
       }
     });
     
-    // Draw IPs
-    alignment.points.forEach((point, index) => {
-      const isEndpoint = index === 0 || index === alignment.points.length - 1;
-      this.drawPoint(point, isActive, isEndpoint);
+    // Only draw IPs (grips) if this alignment is selected
+    if (showGrips) {
+      alignment.points.forEach((point, index) => {
+        const isEndpoint = index === 0 || index === alignment.points.length - 1;
+        this.drawPoint(point, isActive, isEndpoint);
+      });
+    }
+  }
+
+  /**
+   * Draw alignment-level highlight for the entire alignment
+   * @param {Object} alignment - Alignment object to highlight
+   */
+  drawAlignmentHighlight(alignment) {
+    if (!alignment.elements || alignment.elements.length === 0) return;
+    
+    // Draw a subtle highlight behind all elements
+    alignment.elements.forEach(element => {
+      if (element.type === 'tangent') {
+        // Draw tangent highlight
+        this.ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)'; // Semi-transparent green
+        this.ctx.lineWidth = 8;
+        this.ctx.beginPath();
+        this.ctx.moveTo(element.startPoint.x, element.startPoint.y);
+        this.ctx.lineTo(element.endPoint.x, element.endPoint.y);
+        this.ctx.stroke();
+      } else if (element.type === 'arc') {
+        // Draw arc highlight
+        this.ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)'; // Semi-transparent green
+        this.ctx.lineWidth = 8;
+        this.ctx.beginPath();
+        this.ctx.arc(element.centerPoint.x, element.centerPoint.y, element.radius, 
+                     element.startAngle, element.endAngle, element.isRightTurn);
+        this.ctx.stroke();
+      }
     });
   }
 

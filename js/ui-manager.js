@@ -9,6 +9,7 @@ export class UIManager {
   constructor() {
     this.editingArc = null;
     this.callbacks = {};
+    this.currentCursorMode = 'create'; // 'create'
   }
 
   /**
@@ -23,9 +24,9 @@ export class UIManager {
    * Setup event listeners for all UI controls
    */
   setupEventListeners() {
-    // Start Alignment Button
-    document.getElementById('startAlignmentBtn').addEventListener('click', () => {
-      this.callbacks.startDrawing?.();
+    // Create Alignment Button
+    document.getElementById('createAlignmentBtn').addEventListener('click', () => {
+      this.callbacks.createAlignment?.();
     });
     
     // Cancel Button
@@ -33,6 +34,11 @@ export class UIManager {
       this.callbacks.cancelDrawing?.();
     });
     
+    // Cursor mode buttons
+    document.getElementById('crosshairMode').addEventListener('click', () => {
+      this.setCursorMode('create');
+    });
+        
     // Modal Events
     document.getElementById('saveNameBtn').addEventListener('click', () => {
       this.callbacks.saveAlignment?.();
@@ -123,17 +129,17 @@ export class UIManager {
   }
 
   /**
-   * Show start button
+   * Show create alignment button
    */
-  showStartButton() {
-    document.getElementById('startAlignmentBtn').classList.remove('hidden');
+  showCreateAlignmentButton() {
+    document.getElementById('createAlignmentBtn').classList.remove('hidden');
   }
 
   /**
-   * Hide start button
+   * Hide create alignment button
    */
-  hideStartButton() {
-    document.getElementById('startAlignmentBtn').classList.add('hidden');
+  hideCreateAlignmentButton() {
+    document.getElementById('createAlignmentBtn').classList.add('hidden');
   }
 
   /**
@@ -284,6 +290,79 @@ export class UIManager {
    */
   setCursor(canvas, cursor) {
     canvas.style.cursor = cursor;
+  }
+
+  /**
+   * Set cursor mode for drawing
+   * @param {string} mode - 'create'
+   */
+  setCursorMode(mode) {
+    this.currentCursorMode = mode;
+    
+    // Update button states
+    const crosshairBtn = document.getElementById('crosshairMode');
+    crosshairBtn.classList.remove('bg-blue-500');
+    crosshairBtn.classList.add('bg-gray-500');
+
+    
+    if (mode === 'create') {
+      crosshairBtn.classList.remove('bg-gray-500');
+      crosshairBtn.classList.add('bg-blue-500');
+    } 
+    
+    // Update canvas cursor if currently in drawing mode
+    const canvas = document.getElementById('alignmentCanvas');
+    if (canvas.classList.contains('create-mode')) {
+      this.setCanvasMode(canvas, 'drawing');
+    }
+  }
+
+  /**
+   * Set canvas mode with appropriate cursor
+   * @param {HTMLElement} canvas - Canvas element
+   * @param {string} mode - Mode: 'normal', 'drawing', 'dragging'
+   */
+  setCanvasMode(canvas, mode) {
+    // Remove all mode classes
+    canvas.classList.remove('create-mode', 'dragging');
+    
+    // Apply new mode
+    switch(mode) {
+      case 'drawing':
+        if (this.currentCursorMode === 'create') {
+          canvas.classList.add('create-mode');
+        } 
+        break;
+      case 'dragging':
+        canvas.classList.add('dragging');
+        break;
+      case 'normal':
+      default:
+        // Default cursor (arrow) - no additional classes needed
+        break;
+    }
+  }
+
+  /**
+   * Set hover cursor for interactive elements
+   * @param {HTMLElement} canvas - Canvas element
+   * @param {boolean} isHovering - Whether hovering over interactive element
+   */
+  setHoverCursor(canvas, isHovering) {
+    // Don't override create/dragging modes
+    if (canvas.classList.contains('create-mode') || 
+        canvas.classList.contains('dragging')) {
+      return;
+    }
+
+    // if (isHovering ) {
+    //   canvas.style.cursor = 'grab';
+    // } 
+    // else {
+    //   canvas.style.cursor = 'default';
+    // }
+
+
   }
 
   /**
